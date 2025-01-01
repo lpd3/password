@@ -1,13 +1,10 @@
 ;;;; password.lisp: solution to the Password Generator task.
 
-
-;; Gather dependencies.
-
 (in-package :password)
 
 ;; Program constant
 
-(defconstant +version+
+(defvar *version*
   "0.1.0"
   "Version number of this
   program.")
@@ -52,7 +49,7 @@
   (make-array 29
              :element-type 'base-char
 	     :initial-contents
-	     '(#\! #\" #\# #\%
+	      (list #\! #\" #\# #\%
 	       #\& #\' #\( #\)
 	       #\* #\+ #\, #\-
 	       #\. #\/ #\: #\;
@@ -71,7 +68,7 @@
   (make-array 6
     :element-type 'base-char
     :initial-contents
-    '(#\1 #\l #\I
+     (list #\1 #\l #\I
       #\0 #\O #\o))
   "Characters in the collection
    that may easily be visually
@@ -98,95 +95,69 @@
 
 (define-condition unintelligle-length (user-error)
   ((arg
-    :accessor arg
+    :accessor unintelligible-length-arg
     :initarg :arg
     :type t))
   (:report
-   #'(lambda (condition stream)
-       (let ((arg (arg condition)))
-	 (format stream
-		 "Unintelligible length: ~S (~A)"
-		 arg (type-of arg))
-	 :documentation
-	 "Error signated when the wrong data type
-    is used as an argument for the -l/--length 
-    option."))))
+   (lambda (condition stream)
+     (let ((arg (unintelligible-length-arg condition)))
+       (format stream
+	 "Unintelligible length: ~S (~A)"
+	 arg (type-of arg))))))
 
 (define-condition length-out-of-range (user-error)
   ((arg
-    :accessor arg
+    :accessor length-out-of-range-arg
     :initarg :arg
     :type integer))
   (:report
-   #'(lambda (condition stream)
-       (format stream
+    (lambda (condition stream)
+      (format stream
 	 "Password length must be between 4 and 255 inclusive, not ~D"
-	 (arg condition)))
-   :documentation
-   "Error signaled when user supplies a password length less than 4 or
-    more than 255"))
+	 (length-out-of-range-arg condition)))))
 
 (define-condition no-file-specified (user-error) ()
   (:report
-   "The -f/--files option requires one or more filenames (strings), but none were specified"
-   :documentation
-   "Error signaled when the user specifies the -f or --files option, 
-    but no filenames are supplied."))
+   "The -f/--files option requires one or more filenames (strings), but none were specified"))
 
 (define-condition no-count-specified (user-error) ()
   (:report
-   "The -c/--count option requires an integer argument, but none was supplied."
-   :documentation
-   "Error signaled when the user specifies the -c or --count option,
-    but no count was specified."))
+   "The -c/--count option requires an integer argument, but none was supplied."))
 
 (define-condition unintelligible-count (user-error)
   ((arg
-    :accessor arg
+    :accessor unintelligible-count-arg
     :initarg :arg
     :type t))
   (:report
-   #'(lambda (condition stream)
-       (let ((arg (arg condition)))
+    (lambda (condition stream)
+       (let ((arg (unintelligible-count-arg condition)))
 	 (format stream
 	   "Unknown count: ~S (~A)"
-	   arg (type-of arg))))
-   :documentation
-   "Error signaled when the user supplies
-    the wrong type for the -c/--count
-    option."))
+	   arg (type-of arg))))))
 
 (define-condition zero-count (user-error) ()
   (:report
-   "A count of 0 is not permitted."
-   :documentation
-   "Error signaled when the user supplies 0
-    for the -c/--count option"))
+   "A count of 0 is not permitted."))
 
 (define-condition file-exists (user-error)
   ((path
-    :accessor path
+    :accessor file-exists-path
     :initarg :path
     :type string))
   (:report
-   #'(lambda (condition stream)
-       (let ((path (path condition)))
+    (lambda (condition stream)
+       (let ((path (file-exists-path condition)))
 	 (format stream
 	   "File ~A exists"
 	   (ensure-absolute-pathname
-	    path))))
-   :documentation
-   "Error signaled when the -f/--file
-    option is used and the -F/--force 
-    option is not used and the supplied
-    pathname points to a file that 
-    already exists."))
+	    path))))))
 
 ;; Program functionality.
 ;; `run` is the entry-point to the core
 ;; functionality of the program. 
 
-(defun run (files)
+(defun main (files)
   "Entry point of core functionality.
    Takes a list of strings, either
    pathnames or a hyphen. Generates passwords
@@ -298,181 +269,3 @@
       (rotatef (aref array i) (aref array j)))))
 
 ;;; User interface
-
-(defparameter *option-help*
-  (make-option 'help
-    :help "Display the help message and exit."
-    :long "help"
-    :short #\h
-    :reduce (constantly t))
-  "The -h/--help option.")
-
-(defparameter *option-version*
-  (make-option 'version
-    :help "Show version info and quit."
-    :long "version"
-    :short #\v
-    :reduce (constantly t)))
-
-(defparameter *option-count*
-  (make-option 'count
-    :parameter "COUNT: POSITIVE INTEGER"
-    :help "Specify the number of passwords
-           to generate (default: 1)"
-    :long "count"
-    :short #\c
-    :reduce #'last))
-
-(defparameter *option-length*
-  (make-option 'length
-    :parameter "LENGTH: INTEGER n, 4 <= n <= 255"
-    :help "Specify a length in characters for the 
-password, which must be between 4 ane 255. 
-(default 8)"
-    :parameter "INTEGER"
-    :long "length"
-    :short #\l
-    :reduce #'last))
-
-(defparameter *option-files*
-  (make-option 'files
-		     :parameter "FILES: STRING..."
-		     :help "Save password(s) to one or more files
-(a hyphen sends the passwords to stdout). If one or more files already exists, fails with an 
-with an error message. To overwrite files, invoke 
-invoke this utility with both -f/--file and -F/--force."
-		     :long "file"
-		     :short #\f
-		     :initial-value (list )
-		     :reduce #'collect))
-
-(defparameter *option-force*
-  (make-option 'force
-		     :help "Only meaningful when used with -f/--file. 
-If one or more files already exists, overwrite them."
-		     :long "force"
-		     :short #\F
-                     :reduce (constantly t)))
-
-(defparameter *option-avoid-confusing*
-  (make-option 'avoid-confusing
-		     :help "Do not use the numeral one, 
-lowercase L, uppercase i, the numeral
-zero, uppercase o, or lowercase o in the
-password."
-		     :long "avoid-confusing"
-		     :short #\C
-		     :reduce (constantly t)))
-
-(define-string *help-string*
-    "This utility generates one or more strong passwords
-     and prints all of them to stdout or places all of them
-     in one or more files. Passwords will 
-     contain at least one of each of 
-     1. uppercase letters 2. lowercase letters
-     3. decimal digits 4. special characters.
-     All characters are graphic ASCII 
-     characters.~@
-     ~@
-     If no options or arguments are supplied, a single 
-     password consisting of 8 characters is printed to
-     stdout. Options allow specifying the length of the
-     password(s), the number of passwords generated,
-     one or more files to which the passwords will be 
-     written and avoiding ambiguous characters in 
-     the passwords.")
-
-;;; Toplevel interface
-
-(defmacro exit-on-ctrl-c (&body body)
-  "Helper macro to enable the utility
-   to exit gracefully when the user
-   types CTRL-c"
-  `(handler-case (with-user-abort (progn ,@body))
-     (user-abort () (exit 130))))
-
-(defun configure (options)
-  (let ((count (gethash 'count options))
-	(length (gethash 'length options))
-	(files (gethash 'files options)))
-    (when count
-      (cond
-	((eq count t)
-	 (error 'no-count-specified))
-	((notevery #'digit-char-p count)
-	 (error 'unintelligible-count :arg (second count)))
-	(t
-	 (let ((number (parse-integer count)))
-	   (if (zerop number)
-	       (error 'zero-count)
-	       (setf *pwd-count* number))))))
-    (when length
-      (cond
-	((eq length t)
-	 (error 'no-length-specified))
-	((notevery #'digit-char-p length)
-	 (error 'unintelligible-length :arg (second length)))
-        (t
-	 (let ((number (parse-integer length)))
-	   (if (or (< number 4) (> number 255))
-	       (error 'length-out-of-range :arg number)
-	       (setf *pwd-length* number))))))
-    (when files
-      (when (eq files t)
-	    (error 'no-files-specified)))
-    (when (gethash 'force options)
-      (setf *force-p* t))
-    (when (gethash 'avoid-confusing options)
-      (setf *avoid-confusing-p* t))))
-
-(defparameter *ui*
-  (make-interface
-   :name "password"
-   :usage "[OPTIONS] [FILE...]"
-   :summary "Generate one or more random passwords
-             and print them to stdout and/or to 
-             one or more files"
-   :help *help-string*
-   :contents
-   (list
-    *option-help*
-    *option-version*
-    *option-files*
-    *option-force*
-    *option-avoid-confusing*
-    *option-length*)))
-
-(defun toplevel ()
-  ;; missing code to
-  ;; turn off the debugger
-  ;; I don't know how to do
-  ;; that in ECL
-  (exit-on-ctrl-c
-   (multiple-value-bind
-	 (arguments options)
-         (parse-options-or-exit *ui*)
-     (declare (ignore arguments))
-     (handler-case
-	 (cond
-	   ((gethash 'help options)
-	    (print-help-and-exit *ui*))
-	   ((gethash 'version options)
-	    (format t "password version ~A" +version+)
-	    (exit))
-	   (t
-	    (configure options)
-	    (let ((files (gethash 'files options)))
-	      (if files
-		  (run files)
-		  (run (list "-"))))))
-       (user-error (e)
-	 (print-error-and-exit e))))))
-
-
-
-
-
-
-
-
-  
