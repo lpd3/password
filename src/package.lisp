@@ -3,4 +3,6 @@
 (defpackage :password
   (:use :cl)
   (:import-from :ironclad
-		:strong-random))
+                :strong-random)
+  (:import-from :clingon)
+  (:export :main))
