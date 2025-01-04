@@ -22,7 +22,7 @@
 
 (defvar *password-max-count*
   (1- (* 1024 1024))
-  "The maximum number of passwords tjat can be generated per invocation")
+  "The maximum number of passwords that can be generated per invocation")
 
 (defvar *password-min-count*
   1
@@ -200,7 +200,7 @@ and args."
 
 ;; Core functions
 
-(defun passwords (files count length avoid-confusing-p forcep)
+(defun passwords (files count length avoid-ambiguous-p forcep)
   "Generates one or more passwords. Args: 
 
 FILES (nil or a list of 
@@ -283,6 +283,18 @@ file."
                   'write-error
                   :cl-error e)))))))))
 
+(defun print-pwds (stream pwds)
+  "Given STREAM (a stream or a 
+  Boolean), and PWDS, print each
+  password followed by a newline
+  character to STREAM, if a real
+  stream is specified. If STREAM is
+  otherwise non-nil, print to stdout. If 
+  STREAM is nil, return the newline-separated
+  passwords as Lisp strings."
+  (dolist (p pwds)
+    (format stream "~&p~%" p)))
+
 (defun gen-password (length avoid-ambiguous-p)
   "Generate a single random password of length
 LENGTH. Password contains at least one uppercase letter, 
@@ -300,9 +312,9 @@ Error: Will signal an error if the length is less than
     (loop while (< (length pwd) length)
           for index from *password-min-length*
           do
-          (add-random-character pwd index avoid-ambiguous-p)
+             (add-random-character pwd index avoid-ambiguous-p)
           finally
-          (return (nshuffle pwd)))))
+             (return (nshuffle pwd)))))
 
 (defun init-password (length avoid-ambiguous-p)
   "Given LENGTH (integer) and AVOID-AMBIGUOUS-P (boolean),
@@ -324,11 +336,17 @@ Error: Will signal an error if the length is less than
           finally
           (return pwd))))
 
-(defun add-random-char (pwd index &optional char-class)
+(defparameter *char-sets*
+  (make-array 4
+    :element-type 'string
+    :initial-contents (list *uppercase* *lowercase* *digit* *special*)))
+
+(defun add-random-char (pwd index avoid-ambiguous-p &optional char-class)
   "Args:
    
    PWD: a simple vector of base characters 
    INDEX: a non-negative integer
+   AVOID-AMBIGUOUS-P: a boolean
    &optional CHAR-CLASS: a symbol
 
    Returns: a simple vector of base characters.
@@ -340,17 +358,22 @@ Error: Will signal an error if the length is less than
    class of the character: uppercase letter, lowercase
    letter, digit or special character. If nil or 
    not supplied, the character will be randomly
-   chosen from the four classes.
+   chosen from the four classes. If AVOID-AMBIGUOUS-P is
+   non-nil, visually ambiguous characters will be selected.
 
    Errors: An error is signaled when the index is 
    out of bounds."
-   (let ((char-set (ecase char-class
-                     (:upper *uppercase*)
-                     (:lower *lowercase*)
-                     (:digit *digit*)
-                     (:special *special*)
-                     ((nil) (rand-arref #(*uppercase* *lowercase* *digit* *special*))))))
-     (setf (aref pwd index) (rand-aref char-class)))
+  (let ((char-set (ecase char-class
+                    (:upper *uppercase*)
+                    (:lower *lowercase*)
+                    (:digit *digit*)
+                    (:special *special*)
+                    ((nil) (rand-aref *char-sets*)))))
+    (loop for c = (rand-aref char-set)
+          while (and avoid-ambiguous-p
+                     (find c *confusing*))
+          finally
+             (setf (aref pwd index) c)))
   pwd)
 
 (defun rand-aref (vector)

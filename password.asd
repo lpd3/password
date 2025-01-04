@@ -12,4 +12,17 @@
   :author "Laurence Devlin"
   :build-operation "program-op"
   :build-pathname "./bin/password"
-  :entry-point "password:main")
+  :entry-point "password:main"
+  :in-order-to ((test-op (test-op "password/test"))))
+
+(defsystem password/tests
+  :name "password/test"
+  :depends-on (:password :clingon :fiveam :alexandria :serapeum)
+  :serial t
+  :components
+  ((:file tests/package)
+   (:file tests/tests))
+  :perform (test-op (o s)
+             (uiop:symbol-call :fiveam '#:run!
+               (uiop:find-symbol* '#:password-test-suite
+                                  :password-test))))
