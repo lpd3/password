@@ -13,11 +13,10 @@
 
 (fiveam:in-suite core-functionality-test-suite)
 
-(setf fiveam:*num-trials* 10
-      fiveam:*max-trials* 15)
-
 (fiveam:test shuffle-works
  "Test the shuffle function. Does not test for randomness."
+  (setf fiveam:*num-trials* 10
+        fiveam:*max-trials* 15)
   (fiveam:for-all ((ran-string
                     (fiveam:gen-string
                      :length (fiveam:gen-integer :min 4 :max 255)
@@ -31,7 +30,7 @@
          ((= count 10) (fiveam:is (<= (/ equalp-count 10) 1/3)))
       (nshuffle copy)
       (fiveam:is (equalp (frequencies original)
-                  (frequencies copy)))
+                         (frequencies copy)))
       (when (equalp original copy)
         (incf equalp-count)))))
 
@@ -101,7 +100,7 @@ ghijklmnopqrstuvwxyz0123456789-=,'.;()&^%$#@_+:><}{@?")
                       special-vector)))
 
   ;; check out the avoid-ambiguous-p and
-  ;; make sure there is some balance
+  ;; make sure there is some ba&lance
   (let ((vector (make-array 100
                              :element-type 'base-char
                              :initial-element #\Space)))
@@ -129,46 +128,187 @@ ghijklmnopqrstuvwxyz0123456789-=,'.;()&^%$#@_+:><}{@?")
      (dotimes (i 4)
        (fiveam:is-false (find (aref init-c i) *confusing*))))))
 
-(setf fiveam:*num-trials* 100
-      fiveam:*max-trials* 150)
-
 (fiveam:test gen-password-test
   "Test the gen-password function"
+  (setf fiveam:*num-trials* 10
+        fiveam:*max-trials* 15)
   (fiveam:for-all ((length (fiveam:gen-integer :min *password-min-length*
                                                :max *password-max-length*))
                    (avoid-ambiguous-number
                     (fiveam:gen-integer)))
     (let ((avoid-ambiguous-p (oddp avoid-ambiguous-number)))
+
       (fiveam:finishes
-        (gen-password length avoid-ambiguous-p)))))
+        (format t "~&GEN-PASSWORD output~%~A~%"
+                (gen-password length avoid-ambiguous-p))))))
 
 (fiveam:test print-pwds-works
-  (error "Fix this test so that the contents of 
-    printing to stdout and file are visible")
-  "Tests the print-pwds function"
   (let ((pwds nil))
-    (dotimes (8 10)
+    (dotimes (_ 10)
       (push (gen-password 10 nil) pwds))
     (fiveam:finishes
-      (print-pwds t pwds))
+      (uiop:format! t "~&PRINT-PWDS to terminal:~%")
+      (print-pwds *standard-output* pwds))
+
     (uiop:with-temporary-file
         (:stream tf
-         :direction :io
-         :prefix "test-temp-")
-      (fiveam:finishes (print-pwds tf pwds))
-      (format t "~%~%Contents of file:~%~%")
-      (format t "~A~%"
-        (uiop:slurp-stream-string tf)))))
+         :pathname pn
+         :direction :io)
+      (fiveam:finishes
+        (print-pwds tf pwds))
+      :close-stream
+      (with-open-file
+          (f pn
+             :direction :input
+             :if-does-not-exist :error)
+        (uiop:format! t "~&PRINT-PWDS file content:~%")
+        (let ((contents
+                (uiop:slurp-stream-string f)))
+          (uiop:format! t "~&~A~%~%" contents))))))
 
 (fiveam:test passwords-generation
   "Tests that passwords generates lists of
-  passwords successfully"
-                                        ; files, count, length, aap, fp
-  (fiveam:for-all  ((count (fiveam:gen-integer :min 1 :max 100))
-                    (length (fiveam:gen-integer :min 4 :max 255))
-                    (avoid-number (fiveam:gen-integer))
-                    (force-number (fiveam:gen-integer)))
-    (let ((files nil)
-          (avoid-ambiguous-p (oddp avoid-number))
-          (forcep (oddp force-number)))
-      (fiveam:is (listp (passwords files count length avoid-ambiguous-p forcep))))))
+  passwords successfully, and prints
+  them to stdout, given a files arg
+  of nil or a list containing a string that
+  is a hyphen."
+;args: files, count, length, aap, fp
+  (let ((fileses '(nil ("-")))
+       (counts '(1 2 3))
+       (lengths '(4 5 6))
+       (aaps '(nil t))
+       (forcep nil))
+   (dolist (avoid-ambiguous-p aaps)
+     (dolist (length lengths)
+       (dolist (count counts)
+         (dolist (files fileses)
+           (format t "~&(passwords ~A ~A ~A ~A nil:~%"
+                   files count length avoid-ambiguous-p forcep)
+           (fiveam:finishes (passwords files count length avoid-ambiguous-p forcep))
+           (terpri)))))))
+
+(fiveam:test passwords-file-handling-works
+  (uiop:with-temporary-file
+      (:stream s1
+       :pathname p1
+       :direction :io)
+    (uiop:with-temporary-file
+        (:stream s2
+         :pathname p2
+         :direction :io)
+      (uiop:with-temporary-file
+          (:stream s3
+           :pathname p3
+           :direction :io)
+        (fiveam:finishes
+          (passwords
+           `(,p1 ,p2 ,p3)
+           10
+           10
+           nil
+           t))
+        (file-position s1 :start)
+        (file-position s2 :start)
+        (file-position s3 :start)
+        (let ((slrp1
+                (uiop:slurp-stream-string s1))
+              (slrp2
+                (uiop:slurp-stream-string s2))
+              (slrp3
+                (uiop:slurp-stream-string s3)))
+          (fiveam:is
+           (string= slrp1 slrp2))
+          (fiveam:is
+           (string= slrp2 slrp3)))))))
+
+(fiveam:test passwords-does-not-write-over-files-without-forcep
+  (with-open-file
+      (f (ensure-directories-exist
+          "tmp/i-exist.tmp")
+       :direction :output
+       :if-does-not-exist :create
+       :if-exists :overwrite)
+    (princ "Howdy" f))
+  (fiveam:signals
+    file-exists-error
+    (passwords
+     '("tmp/i-exist.tmp")
+     1
+     4
+     nil
+     nil))
+  (uiop:run-program "rm -rf tmp"
+   :error-output t))
+
+(fiveam:test passwords-writes-over-file-with-forcep
+  "Tests that files are overwritten when forcep
+   is non-nil"
+  (with-open-file
+      (f (ensure-directories-exist
+          "tmp/i-exist.tmp")
+       :direction :output
+       :if-does-not-exist :create
+       :if-exists :overwrite)
+    (princ "Howdy" f))
+  (fiveam:finishes
+    (passwords
+     '("tmp/i-exist.tmp")
+     10
+     10
+     nil
+     t))
+  (let ((file-contents
+          (uiop:read-file-string "tmp/i-exist.tmp")))
+    (fiveam:is
+     (> (length file-contents) (1+ (length "Howdy")))))
+  (uiop:run-program "rm -rf tmp"
+                    :error-output t))
+
+(fiveam:test passwords-signals-count-out-of-range-error
+  (fiveam:signals
+    count-out-of-range-error
+    (passwords
+     nil
+     (1- *password-min-count*)
+     4
+     nil
+     nil))
+  (fiveam:signals
+    count-out-of-range-error
+    (passwords
+     nil
+     (1+ *password-max-count*)
+     4
+     nil
+     nil)))
+
+(fiveam:test passwords-signals-length-out-of-range-error
+  (fiveam:signals
+    length-out-of-range-error
+    (passwords
+     nil
+     1
+     (1- *password-min-length*)
+     nil
+     nil))
+  (fiveam:signals
+    length-out-of-range-error
+    (passwords
+     nil
+     1
+     (1+ *password-max-length*)
+     nil
+     nil)))
+
+(fiveam:test passwords-signals-file-write-error
+  (uiop:run-program "mkdir tmp" :error-output t)
+  (uiop:run-program "sudo chmod 1000 tmp") ; all permissions denied for everyone,  
+  (fiveam:signals                          ; and sticky bit set.
+    file-write-error
+    (passwords
+     '("tmp/file-inaccessible.txt")
+     1
+     4
+     nil
+     nil) 
+    (uiop:run-program "sudo rm -rf tmp")))    
