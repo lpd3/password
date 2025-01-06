@@ -71,10 +71,11 @@ range."))
 (define-condition file-write-error (clingon:base-error)
   ((cl-error
     :reader file-write-error-cl-error
-    :initarg :cl-error 
+    :initarg :cl-error
     :documentation
     "The Common Lisp error that generated this error"))
-  (:documentation
+  (:report "write error"
+   :documentation
    "Error signaled during unsuccessful attempts to write to a file.
 See also 'file-exists-error'."))
 
@@ -104,33 +105,33 @@ stdout"
 (defun toplevel/options ()
   "Defines permissable options. The help and version options are supplied
 automatically by clingon."
-  (clingon:make-option
-   :integer
-   :description "Number of passwords to generate"
-   :short-name #\c
-   :long-name "count"
-   :initial-value 1
-   :key :count)
-  (clingon:make-option
-   :integer
-   :description "Password length"
-   :short-name #\l
-   :long-name "length"
-   :initial-value 8
-   :key :length)
-  (clingon:make-option
-   :boolean/true
-   :description "Avoid ambiguous characters"
-   :short-name #\A
-   :long-name "avoid-ambiguous"
-   :key :avoid-ambiguous-p)
-  (clingon:make-option
-   :boolean/true
-   :description "When file paths are specified, permits silent
+  (list (clingon:make-option
+         :integer
+         :description "Number of passwords to generate"
+         :short-name #\c
+         :long-name "count"
+         :initial-value 1
+         :key :count)
+        (clingon:make-option
+         :integer
+         :description "Password length"
+         :short-name #\l
+         :long-name "length"
+         :initial-value 8
+         :key :length)
+        (clingon:make-option
+         :boolean/true
+         :description "Avoid ambiguous characters"
+         :short-name #\A
+         :long-name "avoid-ambiguous"
+         :key :avoid-ambiguous-p)
+        (clingon:make-option
+         :boolean/true
+         :description "When file paths are specified, permits silent
 overwriting of already existing files. Otherwise does nothing."
-   :short-name #\f
-   :long-name "force"
-   :key :forcep))
+         :short-name #\f
+         :long-name "force"
+         :key :forcep)))
    
 (defun toplevel/handler (cmd)
   "Does the work of parsing and handling options and args. 
@@ -140,7 +141,7 @@ and args."
         (count (clingon:getopt cmd :count))
         (length (clingon:getopt cmd :length))
         (avoid-ambiguous-p (clingon:getopt cmd :avoid-ambiguous-p))
-        (forcep (clingon-getopt cmd :forcep)))
+        (forcep (clingon:getopt cmd :forcep)))
     (passwords
      files
      count
@@ -259,7 +260,7 @@ file."
          pwds)
         (dolist (file files)
           (cond
-            ((string= file "-")
+            ((equal file "-")
              (print-pwds
               *standard-output*
               pwds))
@@ -280,7 +281,7 @@ file."
                   pwds))
                (file-error (e)
                  (error
-                  'write-error
+                  'file-write-error
                   :cl-error e)))))))))
 
 (defun print-pwds (stream pwds)
@@ -293,7 +294,7 @@ file."
   STREAM is nil, return the newline-separated
   passwords as Lisp strings."
   (dolist (p pwds)
-    (format stream "~&p~%" p)))
+    (format stream "~&~A~%" p)))
 
 (defun gen-password (length avoid-ambiguous-p)
   "Generate a single random password of length
@@ -309,10 +310,10 @@ characters from appearing in the password.
 Error: Will signal an error if the length is less than 
 *password-min-length*, which is 4 as of version 0.1.0."
   (let ((pwd (init-password length avoid-ambiguous-p)))
-    (loop while (< (length pwd) length)
-          for index from *password-min-length*
+    (loop for index from *password-min-length*
+          while (< index length)
           do
-             (add-random-character pwd index avoid-ambiguous-p)
+             (add-random-char pwd index avoid-ambiguous-p)
           finally
              (return (nshuffle pwd)))))
 

@@ -9,6 +9,7 @@
            :*password-max-length*
            :*password-min-length*
            :*password-min-count*
+           :*password-max-count* 
            :file-exists-error
            :length-out-of-range-error
            :count-out-of-range-error
